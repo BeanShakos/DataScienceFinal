@@ -1,0 +1,133 @@
+---
+title: 'World Bank Data Analyisi'
+author: "Sean Bakos"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Getting Started
+Using Kaggle, I found a data set full of country indicators collected by the World Bank. I would like to use this data set to observe which indicators have the highest impact on the welfare of people living in a country. I'll be using **GINI coefficient**. It's impossible to determine causation through observation alone but I'll try and find and visualize the factors with the greatest correlation.
+
+```{r}
+library(dplyr)
+library(ggplot2)
+data <- read.csv("world_bank_indicators.csv")
+
+#str(data) #commented this out for readability sake
+```
+
+#Gini coefficient correlation
+There are 215 variables, I'd like to narrow these down by seeing which have the highest correlation to GNI coefficient. We only want to look at the correlation of the indicators not the Year, Date Updated, or Country. I'll also use step wise regression to single out the most correlated indicators while hopefully avoiding colinearity
+
+```{r}
+select_indicators <- function(target_var){
+  cor_data <- subset(data, select = -c(1,2,3))
+  num_vars = 6
+  selected_vars = c()
+  
+  for (i in 1:num_vars) {
+    #Creates a correlation matrix while skipping over null values
+    cor_matrix <- cor(cor_data, use = "pairwise.complete.obs")
+    
+    #Isolates the correlations in relation to the target variable index and removes the correlation to itself
+    correlations <- cor_matrix[target_var,]
+    correlations <- correlations[!names(correlations) %in% target_var]
+    
+    #Converts them into absolute value
+    abs_correlation <- abs(correlations)
+    
+    
+    #Finds the variable with the highest correlation, adds it to the list, and then removes it from the correlation data
+    next_var <- names(which.max(abs_correlation))
+    selected_vars <- c(next_var = correlations[next_var], selected_vars)
+    cor_data <- cor_data[, !colnames(cor_data) %in% next_var]
+  }
+  return(selected_vars)
+}
+```
+
+
+```{r}
+Gini_indicators <- select_indicators("Gini.index")
+bar_colors <- ifelse(Gini_indicators > 0, "skyblue", "salmon")
+print(Gini_indicators)
+barplot(
+  Gini_indicators,
+  main = "Step Wise Regression results",
+  xlab = "Indicators",
+  ylab = "Correlation",
+  col = bar_colors,
+  las = 2,
+  cex.names = 0.8,
+  ylim = c(1,-1))
+```
+The results are: 
+Cause of death by injury:  0.5926668 
+Adolescent fertility rate (ages 15-19): 0.6139328 
+Poverty Rate: 0.6417278 
+Income Share held by lowest 10% : -0.9058490 
+Income Share held by lowest 20% : -0.9569335 
+Income Share held by top 10% : 0.9802370 
+
+#Trends over time
+Now I would like to visualize some trends over time. I'm going to look at the following statistics over time:
+* Adolescent Fertility Rates
+* GDP growth
+* GINI Coefficient
+
+to make the data more digestible I'll choose to highlight some specific countries and then show a global average as well
+
+#Adolescent Fertility Rates
+```{r}
+#usa = United State of America, ken = Kenya, tha = Thailand, jor = Jordan, esp = Spain
+countries <- c("usa","ken","tha","jor","esp")
+
+fertility_rate <- data %>% filter(country %in% countries) %>% select(country, year, Adolescent.fertility.rate..births.per.1.000.women.ages.15.19.)
+
+global_average <- data %>% group_by(year) %>% summarise(Global.Fertility = mean(Adolescent.fertility.rate..births.per.1.000.women.ages.15.19., na.rm = TRUE))
+
+global_average$country <- "world average"
+fertility_rate <- bind_rows(fertility_rate, global_average %>% rename(Adolescent.fertility.rate..births.per.1.000.women.ages.15.19. = Global.Fertility))
+
+ggplot(fertility_rate, aes(x=year, y= Adolescent.fertility.rate..births.per.1.000.women.ages.15.19., color = country)) + geom_line() + labs(title = "Adolescent Fertility Rates 1960-2022", x="Year",y="Fertility rate per 1000 women ages 15-19", color = "Country/Global Average")
+```
+
+As we can see, Adolescent fertility rates worldwide are trending down
+#GDP growth
+```{r}
+#usa = United State of America, ken = Kenya, tha = Thailand, jor = Jordan, esp = Spain
+countries <- c("usa","ken","tha","jor","esp")
+
+gdpGrowth_rate <- data %>% filter(country %in% countries) %>% select(country, year, GDP.growth..annual...)
+
+#global_average <- data %>% group_by(year) %>% summarise(Global.gdpGrowth = mean(GDP.growth..annual..., na.rm = TRUE))
+
+#global_average$country <- "world average"
+#gdpGrowth_rate <- bind_rows(gdpGrowth_rate, global_average %>% rename(GDP.growth..annual... = Global.gdpGrowth))
+
+ggplot(gdpGrowth_rate, aes(x=year, y= GDP.growth..annual..., color = country)) + geom_line() + labs(title = "GDP growth rate 1960-2022", x="Year",y="GDP growth %", color = "Country/Global Average")
+```
+
+It seems that the countries with lower actual GDP also have more volatile rates of GDP growth and shrinkage. Overtime the USA saw a smaller rate of growth as their gdp grew
+
+#Gini Coefficient
+```{r}
+#usa = United State of America, ken = Kenya, tha = Thailand, jor = Jordan, esp = Spain
+countries <- c("usa","ken","tha","jor","esp")
+
+gini_rate <- data %>% filter(country %in% countries) %>% select(country, year, Gini.index)
+
+global_average <- data %>% group_by(year) %>% summarise(Global.gini = mean(Gini.index, na.rm = TRUE))
+
+global_average$country <- "world average"
+gini_rate <- bind_rows(gini_rate, global_average %>% rename(Gini.index = Global.gini))
+
+ggplot(gini_rate, aes(x=year, y=Gini.index , color = country)) + geom_line() + labs(title = "GINI Coefficient 1960-2022", x="Year",y="GINI Index value", color = "Country/Global Average")
+```
+
+Gini Coefficients on average around the world are trending upwards at a very steep rate in the least couple decades. This is great news as the higher the gini coefficient typically the lower adolescent birth rates, infant mortality, illiteracy, and wealth inequality. Something of note though is that despite how far back the data goes, the ability to measure the data globally and holistically is a fairly new feat. It would take another decade before we have consist data tracking for the entire world.
