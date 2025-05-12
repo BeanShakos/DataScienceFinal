@@ -13,10 +13,23 @@ knitr::opts_chunk$set(echo = TRUE)
 # Getting Started
 Using Kaggle, I found a data set full of country indicators collected by the World Bank. I would like to use this data set to observe which indicators have the highest impact on the welfare of people living in a country. I'll be using **GINI coefficient**. It's impossible to determine causation through observation alone but I'll try and find and visualize the factors with the greatest correlation.
 
+I also downloaded a csv from the world bank website containing the HDI index and other indicator of the countries
+
 ```{r}
 library(dplyr)
 library(ggplot2)
 data <- read.csv("world_bank_indicators.csv")
+hdiData <- read.csv("HDI_data.csv")
+head(hdiData)
+
+hdiData <- hdiData[,-c(4,6,8,10,12,14,16,18)]
+hdiData <-hdiData [, 1:10]
+colnames(hdiData)<-hdiData[4,]
+hdiData<-hdiData[-c(1:5), ]
+hdiData[hdiData == ".."] <- NA
+hdiData[hdiData == ""] <- NA
+hdiData[,3:10] <- as.data.frame(apply(hdiData[,3:10], 2, as.numeric))
+
 
 #str(data) #commented this out for readability sake
 ```
@@ -25,9 +38,8 @@ data <- read.csv("world_bank_indicators.csv")
 There are 215 variables, I'd like to narrow these down by seeing which have the highest correlation to GNI coefficient. We only want to look at the correlation of the indicators not the Year, Date Updated, or Country. I'll also use step wise regression to single out the most correlated indicators while hopefully avoiding colinearity
 
 ```{r}
-select_indicators <- function(target_var){
+select_indicators <- function(target_var,num_vars){
   cor_data <- subset(data, select = -c(1,2,3))
-  num_vars = 6
   selected_vars = c()
   
   for (i in 1:num_vars) {
@@ -51,9 +63,24 @@ select_indicators <- function(target_var){
 }
 ```
 
+```{r}
+Gini_indicators <- select_indicators("Gini.index",10)
+bar_colors <- ifelse(Gini_indicators > 0, "skyblue", "salmon")
+print(Gini_indicators)
+barplot(
+  Gini_indicators,
+  main = "Step Wise Regression results",
+  xlab = "Indicators",
+  ylab = "Correlation",
+  col = bar_colors,
+  las = 2,
+  cex.names = 0.8,
+  ylim = c(1,-1))
+```
+
 
 ```{r}
-Gini_indicators <- select_indicators("Gini.index")
+Gini_indicators <- select_indicators("Gini.index",6)
 bar_colors <- ifelse(Gini_indicators > 0, "skyblue", "salmon")
 print(Gini_indicators)
 barplot(
@@ -74,6 +101,32 @@ Income Share held by lowest 10% : -0.9058490
 Income Share held by lowest 20% : -0.9569335 
 Income Share held by top 10% : 0.9802370 
 
+# Looking at HDI over time
+```{r}
+years <- colnames(hdiData)[3:10]
+print(Gini_indicators)
+barplot(
+  colMeans(hdiData[,years], na.rm = TRUE),
+  main = "global average of HDI over the years",
+  xlab = "Years",
+  ylab = "HDI value",
+  las = 2,
+  cex.names = 0.8,
+  ylim = c(0,1))
+
+
+```
+
+```{r}
+par(mfrow = c(1,5))
+boxplot(hdiData$"1990", main = "1990", ylim = c(0,1))
+boxplot(hdiData$"2000", main = "2000", ylim = c(0,1))
+boxplot(hdiData$"2010", main = "2010", ylim = c(0,1))
+boxplot(hdiData$"2020", main = "2020", ylim = c(0,1))
+boxplot(hdiData$"2023", main = "2023", ylim = c(0,1))
+
+
+```
 #Trends over time
 Now I would like to visualize some trends over time. I'm going to look at the following statistics over time:
 * Adolescent Fertility Rates
